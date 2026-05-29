@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vendor Report Dashboard</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- AG Grid Community -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.min.css" />
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <!-- AG Grid -->
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.noStyle.js"></script>
+
+  <!-- Tom Select (dropdown) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" />
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<!-- ===================== HEADER ===================== -->
+<header class="app-header">
+  <div class="header-left">
+    <h1>Vendor Report Dashboard</h1>
+    <p>Vendor performance &amp; study quality metrics</p>
+  </div>
+  <button id="export-btn" class="btn btn-primary">&#x1F4E5; Export CSV</button>
+</header>
+
+<!-- ===================== FILTERS ===================== -->
+<section class="filter-section">
+  <div class="filter-card">
+
+    <!-- Dropdown row -->
+    <div class="filter-row filter-dropdowns">
+      <div class="filter-item">
+        <label class="filter-label">Country</label>
+        <select id="filter-country" multiple placeholder="All"></select>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">Vendor</label>
+        <select id="filter-vendor" multiple placeholder="All"></select>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">Study Type</label>
+        <select id="filter-study-type" multiple placeholder="All"></select>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">Project Nature</label>
+        <select id="filter-project-nature" multiple placeholder="All "></select>
+      </div>
+    </div>
+
+    <!-- Slider row -->
+    <div class="filter-row filter-sliders">
+      <div class="slider-group">
+        <label class="filter-label filter-label2">Desired IR (%)</label>
+
+        <div id="slider-desired-ir" class="slider-wrap"></div>
+        <div class="slider-vals">
+          <span id="desired-ir-lo" class="ir_low">0</span> <span id="desired-ir-hi" class="ir_hi">{{ desired_ir_max }}</span>
+        </div>
+        
+      </div>
+      <div class="slider-group">
+        <label class="filter-label filter-label2">Actual IR (%)</label>
+        <div id="slider-actual-ir" class="slider-wrap"></div>
+        <div class="slider-vals">
+          <span id="actual-ir-lo" class="ir_low">0</span> <span id="actual-ir-hi" class="ir_hi">{{ actual_ir_max }}</span>
+        </div>
+      </div>
+      <div class="slider-group">
+        <label class="filter-label filter-label2">LOI (minutes)</label>
+        <div id="slider-loi" class="slider-wrap"></div>
+        <div class="slider-vals">
+          <span id="loi-lo" class="ir_low">0</span>  <span id="loi-hi" class="ir_hi">{{ loi_max }}</span>
+        </div>
+      </div>
+      <div class="slider-reset">
+        <button id="reset-btn" class="btn btn-reset">&#x1F504; Reset Filters</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ===================== KPIs ===================== -->
+<section class="kpi-section" id="kpi-row">
+  <!-- Populated by JS -->
+</section>
+
+<!-- ===================== TABS ===================== -->
+<section class="tabs-section">
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-data-table">&#x1F4CA; Data Table</button>
+    <button class="tab-btn"        data-tab="tab-charts">&#x1F4C8; Charts &amp; Analysis</button>
+    <button class="tab-btn"        data-tab="tab-regional">&#x1F30D; Regional Analysis</button>
+  </div>
+
+  <!-- ─── DATA TABLE ─── -->
+  <div id="tab-data-table" class="tab-content active">
+    <div class="table-controls">
+      <label class="toggle-wrap">
+        <input type="checkbox" id="group-by-toggle"  />
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">Group by (in order):</span>
+      </label>
+      <div class="group-levels" id="group-levels">
+        {% for opt in group_col_options %}
+        <div class="level-wrap">
+          <span class="level-num">{{ loop.index }}.</span>
+          <select class="group-level-sel" data-index="{{ loop.index0 }}">
+            <option value="">— off —</option>
+            {% for o in group_col_options %}
+            <option value="{{ o.value }}" {% if o.value == opt.value %}selected{% endif %}>{{ o.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div id="grouped-table" class="ag-table-wrap">
+      <div class="loading-msg">Loading data…</div>
+    </div>
+  </div>
+
+  <!-- ─── CHARTS ─── -->
+  <div id="tab-charts" class="tab-content">
+    <div class="charts-grid">
+
+      <!-- Tracker Study Analysis -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h4>Tracker Study Analysis</h4>
+          <div class="chart-controls">
+            <div class="ctrl-item">
+              <label class="filter-label">PID</label>
+              <select id="tracker-pid"><option value="">All PIDs</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="chart-controls chart-controls-row">
+          <div class="ctrl-item">
+            <label class="filter-label">Bar Metric</label>
+            <select id="tracker-bar-metric">
+              <option value="both">Achieved + Scrubbed</option>
+              <option value="achieved">Achieved Completes</option>
+              <option value="scrubbed">Scrubbed Removals</option>
+              <option value="allocated">Allocated Completes</option>
+              <option value="achieved_allocated">Achieved + Allocated</option>
+              <option value="counts">Project Counts</option>
+            </select>
+          </div>
+          <div class="ctrl-item">
+            <label class="filter-label">Trend Line</label>
+            <select id="tracker-trend">
+              <option value="actual_ir">Actual IR %</option>
+              <option value="desired_ir">Desired IR %</option>
+              <option value="removal_pct">Avg Removal %</option>
+              <option value="loi">LOI (minutes)</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          <div class="ctrl-item">
+            <label class="filter-label">Sort</label>
+            <div class="radio-group">
+              <label><input type="radio" name="tracker-sort" value="desc" checked /> Desc</label>
+              <label><input type="radio" name="tracker-sort" value="asc" /> Asc</label>
+            </div>
+          </div>
+        </div>
+        <div id="chart-tracker" class="chart-div"></div>
+      </div>
+
+      <!-- Vendor Ranking -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h4>Vendor Performance Ranking</h4>
+          <div class="chart-controls">
+            <div class="ctrl-item">
+              <label class="filter-label">Metric</label>
+              <select id="rank-metric">
+                <option value="achieved_completes">Achieved Completes</option>
+                <option value="actual_ir">Actual IR %</option>
+                <option value="removal_pct">Avg Removal %</option>
+                <option value="allocated_completes">Allocated Completes</option>
+                <option value="scrubbing_removals">Scrubbed Removals</option>
+              </select>
+            </div>
+            <div class="ctrl-item">
+              <label class="filter-label">Top N</label>
+              <select id="top-n">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="chart-ranking" class="chart-div"></div>
+      </div>
+
+    </div><!-- .charts-grid -->
+
+    <!-- Scatter -->
+    <div class="chart-card chart-full">
+      <div class="chart-card-header scatter_chart_header">
+        <h4>Comparative Scatter Analysis</h4>
+        <div class="chart-controls scatter_chart_control">
+          <div class="ctrl-item">
+            <label class="filter-label">X-Axis</label>
+            <select id="scatter-x">
+              <option value="loi" selected>LOI (minutes)</option>
+              <option value="actual_ir">Actual IR %</option>
+              <option value="desired_ir">Desired IR %</option>
+              <option value="removal_pct">Avg Removal %</option>
+              <option value="achieved_completes">Achieved Completes</option>
+              <option value="allocated_completes">Allocated Completes</option>
+            </select>
+          </div>
+          <div class="ctrl-item">
+            <label class="filter-label">Y-Axis</label>
+            <select id="scatter-y">
+              <option value="loi">LOI (minutes)</option>
+              <option value="actual_ir" selected>Actual IR %</option>
+              <option value="desired_ir">Desired IR %</option>
+              <option value="removal_pct">Avg Removal %</option>
+              <option value="achieved_completes">Achieved Completes</option>
+              <option value="allocated_completes">Allocated Completes</option>
+            </select>
+          </div>
+          <div class="ctrl-item">
+            <label class="filter-label">Color By</label>
+            <select id="scatter-color">
+              <option value="study_type" selected>Study Type</option>
+              <option value="vendor">Vendor</option>
+              <option value="country_clean">Country</option>
+              <option value="project_nature">Project Nature</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="chart-scatter" class="chart-div chart-div-tall"></div>
+    </div>
+
+  </div><!-- tab-charts -->
+
+  <!-- ─── REGIONAL ─── -->
+  <div id="tab-regional" class="tab-content">
+    <div class="regional-controls">
+      <div class="ctrl-item">
+        <label class="filter-label">Geography Level</label>
+        <select id="geo-level" disabled>
+          <option value="country" selected>Country</option>
+        </select>
+      </div>
+      <div class="ctrl-item ctrl-grow">
+        <label class="filter-label">Select Regions</label>
+        <select id="geo-regions" multiple placeholder="Click map or select here…"></select>
+      </div>
+      <div class="ctrl-item">
+        <label class="filter-label">Color By</label>
+        <select id="geo-color-metric">
+          <option value="count" selected>Survey Count</option>
+          <option value="achieved_completes">Achieved Completes</option>
+          <option value="actual_ir">Actual IR %</option>
+          <option value="removal_pct">Avg Removal %</option>
+        </select>
+      </div>
+      <div class="ctrl-item">
+        <label class="filter-label">&nbsp;</label>
+        <button id="apply-geo-filter" class="btn btn-primary">Apply to Data Table →</button>
+      </div>
+    </div>
+
+    <p class="map-hint">Click a country on the map to select/deselect. Selected regions appear in the dropdown above.</p>
+    <div class="chart-card">
+      <div id="chart-worldmap" style="height:600px;"></div>
+    </div>
+
+    <div id="region-stats" class="region-stats-card" style="display:none;"></div>
+  </div>
+
+</div><!-- tabs-section -->
+
+<!-- ===================== MODAL ===================== -->
+<div id="detail-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Study Details</span>
+      <button id="modal-close" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="modal-content" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- Injected server-side config -->
+<script>
+  window.DASHBOARD_CONFIG = {
+    desired_ir_max: {{ desired_ir_max }},
+    actual_ir_max:  {{ actual_ir_max }},
+    loi_max:        {{ loi_max }},
+    group_col_options: {{ group_col_options | tojson }}
+  };
+</script>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>
